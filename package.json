@@ -1,0 +1,14 @@
+{
+  "name": "github-pr-extractor",
+  "version": "1.0.0",
+  "description": "Browser extension to extract GitHub PR/Issue/Milestone titles with links",
+  "private": true,
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "lint": "npx eslint src/ --ext .js",
+    "clean": "rm -rf dist/"
+  },
+  "devDependencies": {},
+  "author": "",
+  "license": "MIT"
+}
