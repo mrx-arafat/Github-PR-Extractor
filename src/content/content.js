@@ -429,34 +429,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 // ============================================================
-// Inline Copy Button — Event Delegation Approach
+// Inline Copy Button — Injected Inline on Hover
 //
-// Instead of pre-selecting elements with CSS selectors (fragile),
-// we listen for mouseover on the ENTIRE document. When the mouse
-// enters any <a> that links to a GitHub resource (PR, issue, repo,
-// release, etc.), we show a floating copy button next to it.
+// On mouseover, we inject a small button right AFTER the <a> tag
+// in the DOM. It sits inline between the title and any labels:
+//   [PR Title] [copy btn] [Test Complete]
 //
-// This works on ANY GitHub page regardless of DOM structure.
+// On mouseout, the button is removed. No absolute positioning,
+// no overlap issues — it flows naturally in the text.
 // ============================================================
 
-const COPY_BTN_ID = "ghpr-floating-copy-btn";
+const COPY_BTN_CLASS = "ghpr-inline-copy";
 const TOAST_CLASS = "ghpr-toast";
 
-// URL patterns that qualify a link as "copyable"
 const COPYABLE_PATTERNS = [
-  /\/pull\/\d+/,               // PR
-  /\/issues\/\d+/,             // Issue
-  /\/discussions\/\d+/,        // Discussion
-  /\/releases\/tag\//,         // Release
-  /\/milestone\//,             // Milestone
-  /\/commit\/[a-f0-9]+/,      // Commit
-  /\/tree\/[^/]+$/,            // Branch/tag
-  /\/actions\/runs\/\d+/,     // Action run
-  /\/packages\//,              // Package
-  /^\/[^/]+\/[^/]+\/?$/,      // Repository (owner/repo)
+  /\/pull\/\d+/,
+  /\/issues\/\d+/,
+  /\/discussions\/\d+/,
+  /\/releases\/tag\//,
+  /\/milestone\//,
+  /\/commit\/[a-f0-9]+/,
+  /\/tree\/[^/]+$/,
+  /\/actions\/runs\/\d+/,
+  /\/packages\//,
+  /^\/[^/]+\/[^/]+\/?$/,
 ];
 
-// Links to SKIP (nav, UI elements, not content)
 const SKIP_PATTERNS = [
   /^\/(settings|login|signup|features|pricing|enterprise|sponsors|about|security)\b/,
   /^\/(notifications|new|codespaces)\b/,
@@ -474,29 +472,22 @@ function isCopyableLink(anchor) {
     return false;
   }
 
-  // Must be same-origin GitHub link
   if (url.origin !== window.location.origin) return false;
 
   const path = url.pathname;
-
-  // Skip non-content paths
   if (SKIP_PATTERNS.some((p) => p.test(path))) return false;
 
-  // Must have meaningful text (not just an icon or short label)
   const text = anchor.textContent.trim();
   if (!text || text.length < 3 || text.length > 300) return false;
 
-  // Check if it matches a known resource pattern
   if (COPYABLE_PATTERNS.some((p) => p.test(path))) return true;
 
-  // Also allow links that GitHub marks as "primary" or "title"
   if (
     anchor.classList.contains("Link--primary") ||
     anchor.classList.contains("markdown-title") ||
     anchor.classList.contains("js-navigation-open") ||
     anchor.hasAttribute("data-hovercard-type")
   ) {
-    // But only if the text looks like a title (not a username or label)
     return text.length >= 5;
   }
 
@@ -536,47 +527,40 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = "ghpr-inline-styles";
   style.textContent = `
-    #${COPY_BTN_ID} {
-      position: absolute;
+    .${COPY_BTN_CLASS} {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 26px;
-      height: 26px;
+      width: 24px;
+      height: 24px;
+      margin: 0 4px;
       padding: 0;
-      border: 1px solid rgba(139,148,158,0.4);
-      border-radius: 6px;
+      border: 1px solid rgba(139,148,158,0.3);
+      border-radius: 5px;
       background: #21262d;
       color: #8b949e;
       cursor: pointer;
-      z-index: 99999;
-      opacity: 0;
-      transform: scale(0.85);
-      transition: opacity 120ms ease, transform 120ms ease, background 120ms ease, color 120ms ease;
-      pointer-events: none;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      vertical-align: middle;
+      flex-shrink: 0;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+      line-height: 1;
     }
-    #${COPY_BTN_ID}.ghpr-visible {
-      opacity: 1;
-      transform: scale(1);
-      pointer-events: auto;
-    }
-    #${COPY_BTN_ID}:hover {
+    .${COPY_BTN_CLASS}:hover {
       background: #30363d;
       color: #e6edf3;
       border-color: rgba(139,148,158,0.6);
     }
-    #${COPY_BTN_ID}:active {
-      transform: scale(0.92) !important;
+    .${COPY_BTN_CLASS}:active {
+      transform: scale(0.92);
     }
-    #${COPY_BTN_ID}.ghpr-copied {
+    .${COPY_BTN_CLASS}.ghpr-copied {
       background: #0d4429;
       color: #3fb950;
       border-color: rgba(63,185,80,0.5);
     }
-    #${COPY_BTN_ID} svg {
-      width: 14px;
-      height: 14px;
+    .${COPY_BTN_CLASS} svg {
+      width: 13px;
+      height: 13px;
       pointer-events: none;
     }
 
@@ -630,83 +614,79 @@ function showInlineToast(message) {
   );
 }
 
-// ---- Floating Copy Button (singleton) ----
+// ---- Inline Button Injection ----
 
-let floatingBtn = null;
 let currentAnchor = null;
+let currentBtn = null;
 let hideTimer = null;
 
-function getOrCreateButton() {
-  if (floatingBtn) return floatingBtn;
+function createInlineButton(anchor) {
+  const href = anchor.getAttribute("href");
+  const url = new URL(href, window.location.origin).href;
+  const title = anchor.textContent.trim();
 
-  injectStyles();
+  const btn = document.createElement("button");
+  btn.className = COPY_BTN_CLASS;
+  btn.title = "Copy with link";
+  btn.innerHTML = COPY_ICON_SVG;
 
-  floatingBtn = document.createElement("button");
-  floatingBtn.id = COPY_BTN_ID;
-  floatingBtn.innerHTML = COPY_ICON_SVG;
-  floatingBtn.title = "Copy title with link";
-  document.body.appendChild(floatingBtn);
-
-  floatingBtn.addEventListener("click", (e) => {
+  btn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!currentAnchor) return;
-
-    const href = currentAnchor.getAttribute("href");
-    const url = new URL(href, window.location.origin).href;
-    const title = currentAnchor.textContent.trim();
     const number = extractNumber(new URL(url).pathname);
     const suffix = number ? ` ${number}` : "";
     const displayText = `${title}${suffix}`;
 
     copyRichLink(displayText, url).then(() => {
-      floatingBtn.innerHTML = CHECK_ICON_SVG;
-      floatingBtn.classList.add("ghpr-copied");
+      btn.innerHTML = CHECK_ICON_SVG;
+      btn.classList.add("ghpr-copied");
       showInlineToast(`Copied: ${displayText}`);
 
       setTimeout(() => {
-        floatingBtn.innerHTML = COPY_ICON_SVG;
-        floatingBtn.classList.remove("ghpr-copied");
+        btn.innerHTML = COPY_ICON_SVG;
+        btn.classList.remove("ghpr-copied");
       }, 1500);
     });
   });
 
-  // Keep button visible when hovering the button itself
-  floatingBtn.addEventListener("mouseenter", () => {
+  // Keep button alive while hovering it
+  btn.addEventListener("mouseenter", () => {
     clearTimeout(hideTimer);
   });
 
-  floatingBtn.addEventListener("mouseleave", () => {
-    hideTimer = setTimeout(hideButton, 150);
+  btn.addEventListener("mouseleave", () => {
+    hideTimer = setTimeout(removeButton, 200);
   });
 
-  return floatingBtn;
+  return btn;
 }
 
 function showButton(anchor) {
+  // Clean up previous button if different anchor
+  if (currentAnchor && currentAnchor !== anchor) {
+    removeButton();
+  }
+
   clearTimeout(hideTimer);
   currentAnchor = anchor;
 
-  const btn = getOrCreateButton();
-  const rect = anchor.getBoundingClientRect();
+  // Already showing for this anchor
+  if (currentBtn && currentBtn.parentNode) return;
 
-  // Position to the LEFT of the link to avoid overlapping labels/badges
-  btn.style.top = `${window.scrollY + rect.top + (rect.height - 26) / 2}px`;
-  btn.style.left = `${window.scrollX + rect.left - 32}px`;
+  injectStyles();
 
-  // If too close to the left edge, fallback to right side with extra offset
-  if (rect.left - 32 < 8) {
-    btn.style.left = `${window.scrollX + rect.right + 8}px`;
-  }
+  currentBtn = createInlineButton(anchor);
 
-  btn.classList.add("ghpr-visible");
+  // Insert right after the <a> tag — between title and labels
+  anchor.after(currentBtn);
 }
 
-function hideButton() {
-  if (floatingBtn) {
-    floatingBtn.classList.remove("ghpr-visible");
+function removeButton() {
+  if (currentBtn && currentBtn.parentNode) {
+    currentBtn.remove();
   }
+  currentBtn = null;
   currentAnchor = null;
 }
 
@@ -715,11 +695,16 @@ function hideButton() {
 document.addEventListener(
   "mouseover",
   (e) => {
-    // Walk up from the target to find the nearest <a>
     const anchor = e.target.closest("a");
+
+    // If hovering the copy button itself, keep it alive
+    if (e.target.closest?.(`.${COPY_BTN_CLASS}`)) {
+      clearTimeout(hideTimer);
+      return;
+    }
+
     if (!anchor) return;
 
-    // Is this the same link we're already showing for?
     if (anchor === currentAnchor) {
       clearTimeout(hideTimer);
       return;
@@ -736,15 +721,19 @@ document.addEventListener(
   "mouseout",
   (e) => {
     const anchor = e.target.closest("a");
-    if (!anchor) return;
+    if (!anchor && !e.target.closest?.(`.${COPY_BTN_CLASS}`)) return;
 
-    // Don't hide if moving to the copy button
     const related = e.relatedTarget;
-    if (related && (related.id === COPY_BTN_ID || related.closest?.(`#${COPY_BTN_ID}`))) {
-      return;
+
+    // Don't hide if moving to the copy button or the anchor
+    if (related) {
+      if (related.classList?.contains(COPY_BTN_CLASS)) return;
+      if (related.closest?.(`.${COPY_BTN_CLASS}`)) return;
+      if (related === currentAnchor) return;
+      if (related.closest?.("a") === currentAnchor) return;
     }
 
-    hideTimer = setTimeout(hideButton, 150);
+    hideTimer = setTimeout(removeButton, 200);
   },
   { passive: true }
 );
