@@ -304,6 +304,10 @@ function genericExtract(doc) {
     const title = link.textContent.trim();
     if (!title || title.length < 3 || title.length > 300) continue;
 
+    // Skip user/org profile links (author names, assignees, etc.)
+    const hoverType = link.getAttribute("data-hovercard-type");
+    if (hoverType === "user" || hoverType === "organization") continue;
+
     // Heuristic: must look like a content title link
     const isTitle =
       link.classList.contains("Link--primary") ||
@@ -481,6 +485,10 @@ function isCopyableLink(anchor) {
   if (!text || text.length < 3 || text.length > 300) return false;
 
   if (COPYABLE_PATTERNS.some((p) => p.test(path))) return true;
+
+  // Skip user/org profile links (author names, assignees, etc.)
+  const hoverType = anchor.getAttribute("data-hovercard-type");
+  if (hoverType === "user" || hoverType === "organization") return false;
 
   if (
     anchor.classList.contains("Link--primary") ||

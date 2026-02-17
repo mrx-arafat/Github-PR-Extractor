@@ -95,21 +95,51 @@ async function extractFromPage() {
       return;
     }
 
-    // Inject content script if needed, then message it
+    // Call extractItems() directly via executeScript — no message passing needed.
+    // The content script is auto-loaded via manifest.json, so extractItems() is
+    // already available in the tab's isolated world.
+    let results;
     try {
-      await chrome.scripting.executeScript({
+      results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ["content/content.js"],
+        func: () => {
+          if (typeof extractItems === "function") {
+            return extractItems();
+          }
+          return null;
+        },
       });
     } catch {
-      // content script may already be injected — that's fine
+      showEmpty("Could not connect to this page. Try refreshing.");
+      return;
     }
 
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      action: "extract",
-    });
+    let response = results?.[0]?.result;
 
-    if (!response || !response.success || response.items.length === 0) {
+    // If content script wasn't loaded yet, inject it and retry
+    if (!response) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["content/content.js"],
+        });
+        results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            if (typeof extractItems === "function") {
+              return extractItems();
+            }
+            return null;
+          },
+        });
+        response = results?.[0]?.result;
+      } catch {
+        showEmpty("Could not connect to this page. Try refreshing.");
+        return;
+      }
+    }
+
+    if (!response || !response.success || !response.items?.length) {
       showEmpty(
         response?.error || "No items found. Try a PRs, Issues, or Milestones page."
       );

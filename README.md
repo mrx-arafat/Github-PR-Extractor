@@ -113,6 +113,10 @@ Copies both `text/html` and `text/plain` MIME types using the Clipboard API:
 - **Firefox**: Manifest V3 with `background.scripts` (patched during build)
 - **Firefox gecko ID**: Included in `browser_specific_settings` for add-on signing
 
+## Author
+
+Built by [@mrx-arafat](https://github.com/mrx-arafat)
+
 ## License
 
 MIT

@@ -358,6 +358,10 @@ body {
   color: var(--text-secondary);
 }
 
+.state[hidden] {
+  display: none !important;
+}
+
 .state__hint {
   font-size: 12px;
   color: var(--text-muted);

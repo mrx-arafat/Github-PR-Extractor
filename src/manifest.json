@@ -3,7 +3,7 @@
   "name": "GitHub PR Extractor",
   "version": "1.0.0",
   "description": "Extract PR titles, issue titles, and milestone items from GitHub with their links. One-click copy in multiple formats.",
-  "permissions": ["activeTab", "clipboardWrite"],
+  "permissions": ["activeTab", "clipboardWrite", "scripting"],
   "host_permissions": ["https://github.com/*"],
   "action": {
     "default_popup": "popup/popup.html",
